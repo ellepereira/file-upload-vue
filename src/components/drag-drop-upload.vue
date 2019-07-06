@@ -15,7 +15,6 @@
 
     data: () => ({
       mounted: false,
-      started: false,
       mouse: {x: 0, y: 0},
 
       files: [] as File[],
@@ -74,24 +73,11 @@
           y: e.pageY,
         };
 
-        const target = e.target as Element;
-        console.log('target', target)
-        const droppedOnCircle = this.circle && (e.target === this.circle || this.circle.contains(target));
-        console.log('drp on circle', this.circle)
+        // 144 is the offset between circle and its container
+        const distance = distanceToPoint(this.circle, this.mouse.x, this.mouse.y) / 144;
 
-        const distance = Math.min(distanceToPoint(this.circle, this.mouse.x, this.mouse.y), 1) / 200;
-
-        if (droppedOnCircle) {
-          if (!this.started) {
-            this.currentDistance = 0;
-            this.startAnimation(this.currentDistance, 12, 300);
-            this.started = true;
-          }
-        } else {
-          this.currentDistance = distance * 12;
-          this.setPathData(this.currentDistance);
-          this.started = false;
-        }
+        this.currentDistance = distance * 12;
+        this.setPathData(this.currentDistance);
       },
 
       dragEnd() {
