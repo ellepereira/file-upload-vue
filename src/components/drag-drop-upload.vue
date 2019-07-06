@@ -1,36 +1,24 @@
 <script lang="ts">
   import Vue from 'vue';
+  import UploadedFileEntry from '@/components/uploaded-file-entry.vue';
+  import { animate } from '@/utils/animate';
+
   import $ from 'jquery';
-  import { getRotationToPoint, calculateDraggedDistance } from '@/utils/elements';
-  import { bytesToSize } from '@/utils/math';
-
-  function waitFor(ms: number) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
-
-  function createFileResultComponent(file: any, bin: any) {
-    const li = document.createElement('li');
-    li.innerHTML = `
-      <img src="${bin}" file="${file}"/>
-      <div class="text">
-        <strong>${file.name}</strong>
-        <small>${bytesToSize(file.size)}</small>
-      </div>
-      <div class="progress">
-        <svg class="pie" width="32" height="32"><circle r="8" cx="16" cy="16" /></svg><svg class="tick" viewBox="0 0 24 24"><polyline points="18,7 11,16 6,12" /></svg>
-      </div>`;
-    (li.querySelector('.pie') as any).style.strokeDasharray = 0 + ' ' + 2 * Math.PI * 8;
-    return li;
-  }
+  import { getRotationToPoint, distanceToPoint } from '@/utils/elements';
+  import { waitFor } from '@/utils/wait-for';
 
   export default Vue.extend({
     name: 'drag-drop-upload',
-    components: {},
+    components: {
+      UploadedFileEntry
+    },
 
     data: () => ({
       mounted: false,
       started: false,
-      mousePosition: {x: 0, y: 0},
+      mouse: {x: 0, y: 0},
+
+      files: [] as File[],
 
       show: false,
       dragged: false,
@@ -46,12 +34,12 @@
     },
 
     computed: {
-      computedStyle(): any {
+      styles(): any {
         return {
-          '--r': getRotationToPoint(this.dropContainer, this.mousePosition.x, this.mousePosition.y) + 'deg',
+          '--r': getRotationToPoint(this.dropContainer, this.mouse.x, this.mouse.y) + 'deg',
         };
       },
-      computedClasses(): any {
+      classes(): any {
         return {
           dropped: this.dropped,
           showDrops: this.showDrops,
@@ -81,15 +69,17 @@
         this.dragged = true;
         this.showDrops = true;
 
-        const target = e.target as Element;
-        const droppedOnCircle = this.circle && (e.target === this.circle || this.circle.contains(target));
-
-        const distance = Math.min(calculateDraggedDistance(this.circle, this.dropContainer, e.pageX, e.pageY), 1);
-
-        this.mousePosition = {
+        this.mouse = {
           x: e.pageX,
           y: e.pageY,
         };
+
+        const target = e.target as Element;
+        console.log('target', target)
+        const droppedOnCircle = this.circle && (e.target === this.circle || this.circle.contains(target));
+        console.log('drp on circle', this.circle)
+
+        const distance = Math.min(distanceToPoint(this.circle, this.mouse.x, this.mouse.y), 1) / 200;
 
         if (droppedOnCircle) {
           if (!this.started) {
@@ -115,22 +105,9 @@
       },
 
       async drop(e: any) {
-        const vm = this;
-
         for (let i = 0; i < e.dataTransfer.files.length; i++) {
-          const file = e.dataTransfer.files[i];
-          const reader = new FileReader();
-          reader.readAsDataURL(file);
-          reader.onload = (e: any) => {
-            const bin = e.target.result;
-            const li = createFileResultComponent(file, bin);
-
-            if (vm.list.find('li').length < 5) {
-              vm.list.append(li);
-            }
-          };
+          this.files.push(e.dataTransfer.files[i]);
         }
-
         if (!this.dropped) {
           this.dropped = true;
           await waitFor(400);
@@ -145,58 +122,13 @@
 
           this.show = true;
           await waitFor(800);
-
-          vm.list.find('li .progress').each((index: number, elem: HTMLElement) => {
-            this.startPercent($(elem), 0, 100, 1200);
-          });
         }
       },
 
-      animate(from: number, to: number, duration: number, drawFn: any) {
-        return new Promise((resolve) => {
-          let stop = false;
-          const dur = duration || 200;
-          let start: number = 0;
-          let end: number = 0;
-
-          function startAnim(timeStamp: number) {
-            start = timeStamp;
-            end = start + dur;
-            draw(timeStamp);
-          }
-
-          const draw = (now: number) => {
-            if (stop) {
-              resolve();
-              return;
-            }
-            if (now - start >= dur) {
-              stop = true;
-            }
-            let p = (now - start) / dur;
-            let x = from + (to - from) * p;
-            drawFn(x);
-            requestAnimationFrame(draw);
-          };
-
-          requestAnimationFrame(startAnim);
-        });
-      },
-
       startAnimation(from: number, to: number, duration: number) {
-        return this.animate(from, to, duration, (currentValue: number) => {
+        return animate(from, to, duration, (currentValue: number) => {
           this.setPathData(currentValue);
         });
-      },
-
-      async startPercent(progressElement: any, from: number, to: number, duration: number) {
-        await this.animate(from, to, duration, (currentValue: number) => {
-          progressElement
-            .find('.pie')
-            .css('strokeDasharray', (currentValue * 2 * Math.PI * 8 / 100) + ' ' + 2 * Math.PI * 8);
-        });
-
-        progressElement.addClass('complete');
       },
 
       setPathData(value: any) {
@@ -214,8 +146,8 @@
     <div
       ref="drop"
       class="drop"
-      :class="computedClasses"
-      :style="computedStyle"
+      :class="classes"
+      :style="styles"
       @dragenter.prevent
       @dragstart.prevent
       @dragend.prevent="dragEnd"
@@ -277,7 +209,13 @@
         </div>
       </div>
       <div class="hint">Drop your files to upload</div>
-      <ul class="list"></ul>
+      <ul class="list">
+        <uploaded-file-entry
+          v-if="show === true"
+          v-for="file in files"
+          :file="file"
+        ></uploaded-file-entry>
+      </ul>
     </div>
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -299,16 +237,6 @@
 </template>
 
 <style lang="scss">
-  :root {
-    --primary: #5628EE;
-    --success: #41D071;
-    --grey-light: #99A3BA;
-    --grey: #6C7486;
-    --grey-dark: #3F4656;
-    --light: #CDD9ED;
-    --lighter: #E4ECFA;
-    --shadow: rgba(18, 22, 33, .1);
-  }
 
   .drop {
     --r: 0rad;
@@ -470,150 +398,6 @@
       opacity: 0;
     }
 
-    ul {
-      padding: 0;
-      margin: 0;
-      list-style: none;
-
-      &.list {
-        li {
-          --y: 8px;
-          padding: 16px;
-          display: flex;
-          align-items: center;
-          opacity: 0;
-          transform: translateY(var(--y));
-          transition: opacity .4s ease, transform .4s ease;
-
-          &:not(:first-child) {
-            border-top: 1px solid var(--lighter);
-          }
-
-          $i: 1;
-          $delay: .16;
-          @while $i <= 5 {
-            $delay: $delay + .08;
-            &:nth-child(#{$i}) {
-              transition-delay: #{$delay}s;
-            }
-            $i: $i + 1;
-          }
-
-          img {
-            border-radius: 5px;
-            width: 84px;
-            height: 48px;
-            object-fit: cover;
-            margin-right: 12px;
-            box-shadow: 0 4px 12px var(--shadow);
-          }
-
-          .text {
-            text-overflow: ellipsis;
-            overflow: hidden;
-            white-space: nowrap;
-
-            strong {
-              display: block;
-              font-size: 16px;
-              font-weight: 500;
-              color: var(--grey-dark);
-              margin-bottom: 4px;
-            }
-
-            small {
-              display: block;
-              color: var(--grey-light);
-              font-size: 14px;
-            }
-          }
-
-          .progress {
-            margin-left: auto;
-            border-radius: 50%;
-            background: var(--light);
-            position: relative;
-
-            &:before {
-              --s: 1;
-              content: '';
-              width: 28px;
-              height: 28px;
-              left: 50%;
-              top: 50%;
-              z-index: 1;
-              position: absolute;
-              background: #fff;
-              border-radius: inherit;
-              transform: translate(-50%, -50%) scale(var(--s));
-              transition: transform .32s ease;
-            }
-
-            svg {
-              display: block;
-              fill: none;
-
-              &.pie {
-                --s: 1;
-                width: 32px;
-                height: 32px;
-                transform: rotate(-90deg) scale(var(--s));
-                transition: transform .5s ease;
-
-                circle {
-                  stroke-width: 16;
-                  stroke: var(--primary);
-                }
-              }
-
-              &.tick {
-                width: 24px;
-                height: 24px;
-                position: absolute;
-                left: 50%;
-                top: 50%;
-                transform: translate(-50%, -50%);
-                stroke-width: 3;
-                stroke-linecap: round;
-                stroke-linejoin: round;
-                stroke: var(--primary);
-                transition: stroke .3s ease .8s;
-
-                polyline {
-                  stroke-dasharray: 18;
-                  stroke-dashoffset: 18;
-                  transition: stroke-dashoffset .4s ease .7s;
-                }
-              }
-            }
-
-            &.complete {
-              background: none;
-
-              &:before {
-                --s: 0;
-              }
-
-              svg {
-                &.pie {
-                  --s: .08;
-                  animation: tick .3s linear forwards .4s;
-                }
-
-                &.tick {
-                  stroke: var(--success);
-
-                  polyline {
-                    stroke-dashoffset: 36;
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-
     &.dragged {
       .center {
         --y: 4px;
@@ -689,23 +473,6 @@
     }
   }
 
-  #emitter {
-    position: absolute;
-    left: 0;
-    top: 0;
-  }
-
-  .dot {
-    background-color: var(--primary);
-    border-radius: 50%;
-    position: fixed;
-    z-index: 5;
-    pointer-events: none;
-    display: none;
-    top: 0;
-    left: 0;
-  }
-
   @keyframes move {
     50% {
       transform: translate(-50%, -70%);
@@ -723,43 +490,4 @@
       transform: rotate(-90deg) translate(0, -6px) scale(var(--s));
     }
   }
-
-  html {
-    box-sizing: border-box;
-    -webkit-font-smoothing: antialiased;
-  }
-
-  * {
-    box-sizing: inherit;
-
-    &:before,
-    &:after {
-      box-sizing: inherit;
-    }
-  }
-
-  // Center & dribbble
-  body {
-    min-height: 100vh;
-    font-family: Roboto, Arial;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    background: var(--light);
-    padding: 20px;
-
-    .dribbble {
-      position: fixed;
-      display: block;
-      right: 20px;
-      bottom: 20px;
-
-      img {
-        display: block;
-        height: 28px;
-      }
-    }
-  }
-
-
 </style>

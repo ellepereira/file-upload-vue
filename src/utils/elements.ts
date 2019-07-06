@@ -1,4 +1,4 @@
-import { getRotationTransform } from './math';
+import { getRotationTransform, getPointDistance, clamp } from './math';
 
 export function getOffset(el: HTMLElement) {
   const rect = el.getBoundingClientRect();
@@ -23,36 +23,30 @@ export function getRotationToPoint(elem: HTMLElement, pointX: number, pointY: nu
     x: offset.left + getWidth(elem) / 2,
     y: offset.top + getHeight(elem) / 2,
   };
+
   return getRotationTransform(pointX, pointY, elementCenter.x, elementCenter.y);
 }
 
-export function calculateDraggedDistance(element: HTMLElement, container: HTMLElement, mX: number, mY: number) {
-  const from = {
-    x: mX,
-    y: mY,
-  };
-  const vectorA = getOffset(element);
-  const vectorB = getOffset(container);
+export function distanceToPoint(element: HTMLElement, x: number, y: number) {
+  const elementRect = getOffset(element);
+  const width = element.offsetWidth;
+  const height = element.offsetHeight;
 
-  const nx1 = vectorA.left;
-  const ny1 = vectorA.top;
-  const nx2 = nx1 + element.offsetWidth;
-  const ny2 = ny1 + element.offsetHeight;
-  const elemOffset = {
-    top: vectorA.top - vectorB.top,
-    left: vectorA.left - vectorB.left,
+  const x1 = elementRect.left;
+  const y1 = elementRect.top;
+
+  const x2 = x1 + width;
+  const y2 = y1 + height;
+
+  const from = {
+    x,
+    y,
   };
-  const maxX1 = Math.max(mX, nx1);
-  const minX2 = Math.min(mX, nx2);
-  const maxY1 = Math.max(mY, ny1);
-  const minY2 = Math.min(mY, ny2);
-  const intersectX = minX2 >= maxX1;
-  const intersectY = minY2 >= maxY1;
+
   const to = {
-    x: intersectX ? mX : nx2 < mX ? nx2 : nx1,
-    y: intersectY ? mY : ny2 < mY ? ny2 : ny1,
+    x: clamp(x1, x2, x),
+    y: clamp(y1, y2, y),
   };
-  const distX = to.x - from.x;
-  const distY = to.y - from.y;
-  return Math.sqrt(distX * distX + distY * distY) / elemOffset.left;
+
+  return getPointDistance(from, to);
 }
