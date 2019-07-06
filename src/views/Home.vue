@@ -1,84 +1,36 @@
 <script lang="ts">
   import Vue from 'vue';
-  import HelloWorld from '@/components/HelloWorld.vue'; // @ is an alias to /src
   import $ from 'jquery';
+  import { getRotationToPoint, calculateDraggedDistance } from '@/utils/elements';
+  import { bytesToSize } from '@/utils/math';
 
-  // const dropContainer = $('.drop');
-  // const center = dropContainer.find('.center > div');
-  // const circle = center.children('.circle');
-  // const list = dropContainer.children('.list');
-
-  function linear(n: any) {
-    return n;
+  function waitFor(ms: number) {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  function getOffset(el: any) {
-    if (!el) {
-      return {};
-    }
-
-    const rect = el.getBoundingClientRect();
-
-    return {
-      top: rect.top + document.body.scrollTop,
-      left: rect.left + document.body.scrollLeft
-    };
-  }
-
-  function getWidth(el: Element) {
-    return el.getBoundingClientRect().width;
-  }
-
-  function getHeight(el: Element) {
-    return el.getBoundingClientRect().height;
-  }
-
-  function bytesToSize(bytes: any): any {
-    if (bytes == 0) {
-      return '0 Byte';
-    }
-    let i = Math.floor(Math.log(bytes) / Math.log(1024));
-    let sizes = ['Bytes', 'Kb', 'Mb', 'Gb', 'Tb'];
-    return Math.round(bytes / Math.pow(1024, i)) + ' ' + sizes[i];
-  }
-
-  function createRenderOnLoad(file: any, list: any) {
-    return function renderOnLoad(this: any) {
-      let bin = this.result;
-      let li = $('<li />');
-      let img = $('<img />');
-      let text = $('<div />').addClass('text');
-      let strong = $('<strong />').text(file.name);
-      let small = $('<small />').text(bytesToSize(file.size));
-      let progress = $('<div />').addClass('progress').html('<svg class="pie" width="32" height="32"><circle r="8" cx="16" cy="16" /></svg><svg class="tick" viewBox="0 0 24 24"><polyline points="18,7 11,16 6,12" /></svg>');
-
-      img[0].file = file;
-      img[0].src = bin;
-
-      img.appendTo(li);
-      text.append(strong).append(small).appendTo(li);
-      progress.appendTo(li);
-
-      progress.find('.pie').css('strokeDasharray', 0 + ' ' + 2 * Math.PI * 8);
-
-      if (list.find('li').length < 5) {
-        li.appendTo(list);
-      }
-      console.log('LIST on load finished', file, list, this);
-    };
+  function createFileResultComponent(file: any, bin: any) {
+    const li = document.createElement('li');
+    li.innerHTML = `
+      <img src="${bin}" file="${file}"/>
+      <div class="text">
+        <strong>${file.name}</strong>
+        <small>${bytesToSize(file.size)}</small>
+      </div>
+      <div class="progress">
+        <svg class="pie" width="32" height="32"><circle r="8" cx="16" cy="16" /></svg><svg class="tick" viewBox="0 0 24 24"><polyline points="18,7 11,16 6,12" /></svg>
+      </div>`;
+    (li.querySelector('.pie') as any).style.strokeDasharray = 0 + ' ' + 2 * Math.PI * 8;
+    return li;
   }
 
   export default Vue.extend({
-    name: 'home',
-    components: {
-      HelloWorld,
-    },
+    name: 'drag-drop-upload',
+    components: {},
+
     data: () => ({
       mounted: false,
       started: false,
       mousePosition: {x: 0, y: 0},
-
-      val: 0,
 
       show: false,
       dragged: false,
@@ -86,6 +38,7 @@
       showDrops: false,
 
       currentDistance: 0,
+      placeholderElement: document.createElement('span'),
     }),
 
     mounted() {
@@ -94,11 +47,8 @@
 
     computed: {
       computedStyle(): any {
-        if (!this.mounted) {
-          return null;
-        }
         return {
-          '--r': this.calculateRotate(this.dropContainer, this.mousePosition.x, this.mousePosition.y) + 'deg',
+          '--r': getRotationToPoint(this.dropContainer, this.mousePosition.x, this.mousePosition.y) + 'deg',
         };
       },
       computedClasses(): any {
@@ -109,50 +59,39 @@
           show: this.show,
         };
       },
-      dropContainer: function(): any {
-        if (!this.mounted) {
-          return null;
-        }
 
-        return this.$refs.drop || {} as Element;
-      },
-      center: function(): Element | null {
-        if (!this.mounted) {
-          return null;
+      dropContainer(): HTMLElement {
+        if (this.mounted) {
+          return this.$refs.drop as HTMLElement;
         }
-        return this.dropContainer.querySelector('.center > div');
+        return this.placeholderElement;
       },
-      circle: function(): Element | null {
-        if (!this.mounted) {
-          return null;
-        }
-        return this.center ? this.center.querySelector('.circle') : null;
-        // return this.center ? this.center.querySelectorAll('.circle') : null;
+
+      circle(): HTMLElement {
+        return this.dropContainer.querySelector('.circle') || this.placeholderElement;
       },
-      list: function(): any {
-        if (!this.mounted) {
-          return null;
-        }
+
+      list(): JQuery<HTMLElement> {
         return $('.drop').children('.list');
-        //return this.$el.querySelector('.list');
       }
     },
+
     methods: {
       dragOver(e: DragEvent) {
-        // dropContainer.addClass('dragged showDrops').css({
-        //     '--r': this.calculateRotate(dropContainer, e.pageX, e.pageY) + 'deg'
-        // });
         this.dragged = true;
         this.showDrops = true;
+
         const target = e.target as Element;
-        const bool = e.target === this.circle || (this.circle && this.circle.contains(target));
-        const distance = this.calculateDistance(this.circle, this.dropContainer, e.pageX, e.pageY) > 1
-          ? 1 : this.calculateDistance(this.circle, this.dropContainer, e.pageX, e.pageY);
+        const droppedOnCircle = this.circle && (e.target === this.circle || this.circle.contains(target));
+
+        const distance = Math.min(calculateDraggedDistance(this.circle, this.dropContainer, e.pageX, e.pageY), 1);
+
         this.mousePosition = {
           x: e.pageX,
           y: e.pageY,
         };
-        if (bool) {
+
+        if (droppedOnCircle) {
           if (!this.started) {
             this.currentDistance = 0;
             this.startAnimation(this.currentDistance, 12, 300);
@@ -175,196 +114,92 @@
         this.showDrops = false;
       },
 
-      drop(e: any) {
+      async drop(e: any) {
         const vm = this;
-
-        if (!this.dropContainer.classList.contains('dropped')) {
-          this.dropContainer.classList.add('dropped');
-          setTimeout(() => {
-            this.startAnimation(this.currentDistance, 18, 100, () => {
-              this.showDrops = false;
-              setTimeout(() => {
-                this.startAnimation(18, 12, 300);
-                setTimeout(() => {
-                  this.show = true;
-
-                  //Fake Upload durations
-                  setTimeout(() => {
-                    // const elements = this.list.querySelectorAll('li .progress');
-                    // Array.prototype.forEach.call(elements, (el, i) => {
-                    //   this.startPercent(el, 0, 100, 1200);
-                    // });
-
-                    vm.list.find('li .progress').each(function(a, b) {
-                      console.log('li item progress', b);
-                      vm.startPercent($(b), 0, 100, 1200);
-                    });
-                    console.log('list', this.list);
-
-                  }, 800);
-
-                }, 400);
-              }, 200);
-            });
-          }, 400);
-        }
-
-        // for (let i = 0; i < e.dataTransfer.files.length; i++) {
-        //   let file = e.dataTransfer.files[i],
-        //     reader = new FileReader();
-        //   reader.readAsDataURL(file);
-        //   reader.onload = createRenderOnLoad(file, this.list);
-        // }
 
         for (let i = 0; i < e.dataTransfer.files.length; i++) {
           const file = e.dataTransfer.files[i];
           const reader = new FileReader();
           reader.readAsDataURL(file);
-          reader.onload = function(e) {
-            console.log('reder loaded', e, this.result);
-
-            const bin = this.result;
-            const li = $('<li />');
-            const img = $('<img />');
-            const text = $('<div />').addClass('text');
-            const strong = $('<strong />').text(file.name);
-            const small = $('<small />').text(bytesToSize(file.size));
-            const progress = $('<div />')
-              .addClass('progress')
-              .html(`<svg class="pie" width="32" height="32"><circle r="8" cx="16" cy="16" /></svg><svg class="tick" viewBox="0 0 24 24"><polyline points="18,7 11,16 6,12" /></svg>`);
-
-            img[0].file = file;
-            img[0].src = bin;
-
-            img.appendTo(li);
-            text.append(strong).append(small).appendTo(li);
-            progress.appendTo(li);
-
-            progress.find('.pie').css('strokeDasharray', 0 + ' ' + 2 * Math.PI * 8);
+          reader.onload = (e: any) => {
+            const bin = e.target.result;
+            const li = createFileResultComponent(file, bin);
 
             if (vm.list.find('li').length < 5) {
-              li.appendTo(vm.list);
+              vm.list.append(li);
             }
-
           };
         }
-      },
 
-      calculateDistance(elem: any, parent: any, mX: number, mY: number): any {
-        const from = {
-            x: mX,
-            y: mY
-          },
-          offset = getOffset(elem),
-          parentOffset = getOffset(parent),
-          nx1 = offset.left,
-          ny1 = offset.top,
-          nx2 = nx1 + elem.offsetWidth,
-          ny2 = ny1 + elem.offsetHeight,
-          elemOffset = {
-            top: offset.top - parentOffset.top,
-            left: offset.left - parentOffset.left,
-          },
-          maxX1 = Math.max(mX, nx1),
-          minX2 = Math.min(mX, nx2),
-          maxY1 = Math.max(mY, ny1),
-          minY2 = Math.min(mY, ny2),
-          intersectX = minX2 >= maxX1,
-          intersectY = minY2 >= maxY1,
-          to = {
-            x: intersectX ? mX : nx2 < mX ? nx2 : nx1,
-            y: intersectY ? mY : ny2 < mY ? ny2 : ny1,
-          },
-          distX = to.x - from.x,
-          distY = to.y - from.y;
-        return Math.sqrt(distX * distX + distY * distY) / elemOffset.left;
-      },
+        if (!this.dropped) {
+          this.dropped = true;
+          await waitFor(400);
 
-      calculateRotate(elem: any, mX: number, mY: number): any {
-        const offset = getOffset(elem);
-        const center = {
-          x: offset.left + getWidth(elem) / 2,
-          y: offset.top + getHeight(elem) / 2,
-        };
-        const radians = Math.atan2(mX - center.x, mY - center.y);
-        const degree = (radians * (180 / Math.PI) * -1) + 180;
-        return degree;
-      },
+          // go from the current distance to 18 in 100 milliseconds
+          await this.startAnimation(this.currentDistance, 18, 100);
+          this.showDrops = false;
 
-      startAnimation(from: any, to: any, duration: any, callback?: any) {
-        const vm = this;
-        let stop = false;
-        const dur = duration || 200;
-        let start: number = 0;
-        let end: number = 0;
+          await waitFor(200);
+          await this.startAnimation(18, 12, 300);
+          await waitFor(100);
 
-        function startAnim(timeStamp: number) {
-          start = timeStamp;
-          end = start + dur;
-          draw(timeStamp);
+          this.show = true;
+          await waitFor(800);
+
+          vm.list.find('li .progress').each((index: number, elem: HTMLElement) => {
+            this.startPercent($(elem), 0, 100, 1200);
+          });
         }
+      },
 
-        function draw(now: number) {
-          if (stop) {
-            if (callback && typeof (callback) === 'function') {
-              callback();
+      animate(from: number, to: number, duration: number, drawFn: any) {
+        return new Promise((resolve) => {
+          let stop = false;
+          const dur = duration || 200;
+          let start: number = 0;
+          let end: number = 0;
+
+          function startAnim(timeStamp: number) {
+            start = timeStamp;
+            end = start + dur;
+            draw(timeStamp);
+          }
+
+          const draw = (now: number) => {
+            if (stop) {
+              resolve();
+              return;
             }
-            return;
-          }
-          if (now - start >= dur) {
-            stop = true;
-          }
-          let p = (now - start) / dur;
-          vm.val = linear(p);
-          let x = from + (to - from) * vm.val;
-          vm.setPathData(x);
-          requestAnimationFrame(draw);
-        }
+            if (now - start >= dur) {
+              stop = true;
+            }
+            let p = (now - start) / dur;
+            let x = from + (to - from) * p;
+            drawFn(x);
+            requestAnimationFrame(draw);
+          };
 
-        requestAnimationFrame(startAnim);
+          requestAnimationFrame(startAnim);
+        });
       },
 
-      startPercent(progressElement: any, from: any, to: any, duration: any) {
-        let stop = false;
-        let dur = duration || 200;
-        let start: any = null;
-        let end: any = null;
+      startAnimation(from: number, to: number, duration: number) {
+        return this.animate(from, to, duration, (currentValue: number) => {
+          this.setPathData(currentValue);
+        });
+      },
 
-        const vm = this;
+      async startPercent(progressElement: any, from: number, to: number, duration: number) {
+        await this.animate(from, to, duration, (currentValue: number) => {
+          progressElement
+            .find('.pie')
+            .css('strokeDasharray', (currentValue * 2 * Math.PI * 8 / 100) + ' ' + 2 * Math.PI * 8);
+        });
 
-        function startAnim(timeStamp: any) {
-          start = timeStamp;
-          end = start + dur;
-          draw(timeStamp);
-        }
-
-        function draw(now: any) {
-          //console.log('draw percent', start, now, end, stop);
-          if (stop) {
-            return;
-          }
-          if (now - start >= dur) {
-            stop = true;
-          }
-          let p = (now - start) / dur;
-          vm.val = linear(p);
-          let x = from + (to - from) * vm.val;
-          if (!progressElement.hasClass('complete')) {
-            progressElement.find('.pie').css('strokeDasharray', (x * 2 * Math.PI * 8 / 100) + ' ' + 2 * Math.PI * 8);
-            if (x >= 100) {
-              progressElement.addClass('complete');
-            }
-          }
-          requestAnimationFrame(draw);
-        }
-
-        requestAnimationFrame(startAnim);
+        progressElement.addClass('complete');
       },
 
       setPathData(value: any) {
-        if (!this.circle) {
-          return;
-        }
         const svgPath = this.circle.querySelector('svg path');
         if (svgPath) {
           svgPath.setAttribute('d', 'M46,80 C55.3966448,80 63.9029705,76.1880913 70.0569683,70.0262831 C76.2007441,63.8747097 80,55.3810367 80,46 C80,36.6003571 76.1856584,28.0916013 70.0203842,21.9371418 C63.8692805,15.7968278 55.3780386, ' + value + ' 46, ' + value + ' C36.596754, ' + value + ' 28.0850784,15.8172663 21.9300655,21.9867066 C15.7939108,28.1372443 12,36.6255645 12,46 C12,55.4035343 15.8175004,63.9154436 21.9872741,70.0705007 C28.1377665,76.2063225 36.6258528,80 46,80 Z');
@@ -415,7 +250,7 @@
         </ul>
       </nav>
       <div class="intro">
-        <h4>No recents</h4>
+        <h4>No recent files</h4>
         <p>Drag &amp; Drop to upload or create a new watch folder for Auto-upload</p>
       </div>
       <div class="center">
@@ -460,7 +295,6 @@
         ></path>
       </symbol>
     </svg>
-
   </div>
 </template>
 
@@ -675,6 +509,10 @@
           }
 
           .text {
+            text-overflow: ellipsis;
+            overflow: hidden;
+            white-space: nowrap;
+
             strong {
               display: block;
               font-size: 16px;
@@ -742,7 +580,7 @@
                 transition: stroke .3s ease .8s;
 
                 polyline {
-                  stroke-dasharray: 18 18 18;
+                  stroke-dasharray: 18;
                   stroke-dashoffset: 18;
                   transition: stroke-dashoffset .4s ease .7s;
                 }
