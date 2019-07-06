@@ -1,29 +1,3 @@
-# upload-ui
+# File Upload - VueJS Example
 
-## Project setup
-```
-npm install
-```
-
-### Compiles and hot-reloads for development
-```
-npm run serve
-```
-
-### Compiles and minifies for production
-```
-npm run build
-```
-
-### Run your tests
-```
-npm run test
-```
-
-### Lints and fixes files
-```
-npm run lint
-```
-
-### Customize configuration
-See [Configuration Reference](https://cli.vuejs.org/config/).
+VueJS implementation of this [dribble concept](https://dribbble.com/shots/4460706-Drag-Drop-upload-concept) and the jQuery version [here](https://codepen.io/aaroniker/full/jjZGLG)
