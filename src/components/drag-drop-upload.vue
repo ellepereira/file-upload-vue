@@ -41,7 +41,6 @@
           showDrops: this.showDrops,
           dragged: this.dragged,
           show: this.show,
-          // hovering: this.hovering,
         };
       },
 
@@ -103,7 +102,6 @@
           await waitFor(300);
 
           this.show = true;
-          await waitFor(800);
         }
       },
 
@@ -126,7 +124,6 @@
       :style="styles"
       @dragenter.prevent
       @dragstart.prevent
-      @dragend.prevent="dragEnd"
       @dragleave.prevent="dragLeave"
       @dragover.prevent="dragOver"
       @drag.prevent
@@ -173,6 +170,7 @@
       <div class="hint">Drop your files to upload</div>
       <ul class="list">
         <uploaded-file-entry
+          class="fade-in-top"
           v-if="show === true"
           v-for="file in files"
           :file="file"
@@ -191,7 +189,8 @@
     border-radius: 6px;
     box-shadow: 0 4px 24px -2px var(--shadow);
     position: relative;
-
+    overflow: auto;
+    
     nav {
       border-bottom: 1px solid var(--lighter);
       display: flex;
@@ -407,6 +406,16 @@
     }
   }
 
+  .hovering {
+    -webkit-animation: scale-up-center 0.3s linear 1 both;
+    animation: scale-up-center 0.3s linear 1 both;
+  }
+
+  .fade-in-top {
+    -webkit-animation: fade-in-top 0.5s cubic-bezier(0.390, 0.575, 0.565, 1.000) both;
+    animation: fade-in-top 0.6s cubic-bezier(0.390, 0.575, 0.565, 1.000) both;
+  }
+
   .fade-out-top {
     -webkit-animation: fade-out-top 0.7s cubic-bezier(0.250, 0.460, 0.450, 0.940) both;
     animation: fade-out-top 0.7s cubic-bezier(0.250, 0.460, 0.450, 0.940) both;
@@ -438,12 +447,6 @@
     }
   }
 
-
-  .hovering {
-    -webkit-animation: scale-up-center 0.3s linear 1 both;
-    animation: scale-up-center 0.3s linear 1 both;
-  }
-
   @-webkit-keyframes scale-up-center {
     0% {
       -webkit-transform: scale(1);
@@ -465,4 +468,30 @@
       transform: scale(1.5);
     }
   }
+
+  @-webkit-keyframes fade-in-top {
+    0% {
+      -webkit-transform: translateY(-20px);
+      transform: translateY(-20px);
+      opacity: 0;
+    }
+    100% {
+      -webkit-transform: translateY(0);
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+  @keyframes fade-in-top {
+    0% {
+      -webkit-transform: translateY(-20px);
+      transform: translateY(-20px);
+      opacity: 0;
+    }
+    100% {
+      -webkit-transform: translateY(0);
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+
 </style>

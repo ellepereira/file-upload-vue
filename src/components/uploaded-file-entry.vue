@@ -136,6 +136,7 @@
 
           small {
             display: block;
+            text-align: left;
             color: var(--grey-light);
             font-size: 14px;
           }
